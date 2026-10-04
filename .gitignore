@@ -1,4 +1,4 @@
-# binary artifacts
+# binary artifacts (built by build.sh)
 initramfs/init
 initramfs/bin/
 initramfs/sbin/
@@ -13,4 +13,11 @@ initramfs/usr/sbin/
 *.cpio.gz
 iso/boot/vmlinuz
 iso/boot/initramfs.gz
+
+# kernel build tree
 linux-*/
+
+# runtime state
+initramfs/var/log/*
+!initramfs/var/log/.keep
+initramfs/run/
