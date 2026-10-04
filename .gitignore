@@ -1,0 +1,9 @@
+initramfs/bin/
+initramfs/sbin/
+initramfs/usr/bin/
+initramfs/usr/sbin/
+*.iso
+*.cpio.gz
+iso/boot/vmlinuz
+iso/boot/initramfs.gz
+linux-*/

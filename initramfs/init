@@ -1,0 +1,17 @@
+#!/bin/sh
+mount -t proc  none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+
+AETHEL_VER=$(sed -n 's/^VERSION="\(.*\)"/\1/p' /etc/aethel-release)
+
+echo ""
+echo "========================================="
+echo "      Welcome to Aethel Linux $AETHEL_VER"
+echo "========================================="
+echo ""
+echo "Type 'fastfetch' for system info."
+echo "Type 'help' for busybox commands."
+echo ""
+
+exec setsid cttyhack /bin/sh
