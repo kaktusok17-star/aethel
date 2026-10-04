@@ -57,9 +57,6 @@ static void print_banner(void) {
         "=========================================\n"
         "     Welcome to Aethel Linux %s\n"
         "=========================================\n"
-        "\n"
-        "Type 'fastfetch' for system info.\n"
-        "Type 'help' for busybox commands.\n"
         "\n", ver);
     msg(buf);
 }
@@ -83,7 +80,28 @@ static void mount_all(void) {
     try_mount("tmpfs", "/run", "tmpfs");
 }
 
-static pid_t spawn_shell(void) {
+static void set_hostname(void) {
+    char host[256];
+    host[0] = '\0';
+
+    FILE *f = fopen("/etc/hostname", "r");
+    if (f) {
+        if (fgets(host, sizeof(host), f)) {
+            char *p = strpbrk(host, "\r\n");
+            if (p) *p = '\0';
+        }
+        fclose(f);
+    }
+
+    if (!host[0]) snprintf(host, sizeof(host), "aethel");
+
+    if (sethostname(host, strlen(host)) != 0) {
+        msg("init: sethostname failed\n");
+    }
+}
+
+/* Запустить login или first-boot setup на tty1 */
+static pid_t spawn_login(void) {
     pid_t pid = fork();
     if (pid < 0) return -1;
     if (pid == 0) {
@@ -98,7 +116,6 @@ static pid_t spawn_shell(void) {
         }
         ioctl(0, TIOCSCTTY, 0);
 
-        char *argv[] = { "/bin/sh", "-l", NULL };
         char *envp[] = {
             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "HOME=/root",
@@ -106,7 +123,21 @@ static pid_t spawn_shell(void) {
             "SHELL=/bin/sh",
             NULL
         };
-        execve("/bin/sh", argv, envp);
+
+        /* First boot → run aethel-setup. Otherwise → login. */
+        struct stat st;
+        if (stat("/etc/aethel/.configured", &st) != 0) {
+            char *setup_argv[] = { "/bin/sh", "/usr/bin/aethel-setup", NULL };
+            execve("/bin/sh", setup_argv, envp);
+        } else {
+            char *login_argv[] = { "/usr/bin/aethel-login", NULL };
+            execve("/usr/bin/aethel-login", login_argv, envp);
+        }
+
+        /* Fallback: root shell */
+        msg("init: no login/setup found, starting root shell\n");
+        char *sh_argv[] = { "/bin/sh", "-l", NULL };
+        execve("/bin/sh", sh_argv, envp);
         _exit(127);
     }
     return pid;
@@ -128,7 +159,6 @@ static void do_reboot(int action) {
         reboot(RB_AUTOBOOT);
     }
 
-    /* Если syscall провалился (например, в контейнере) */
     msg("init: reboot() failed, trying ACPI poweroff...\n");
     reboot(RB_POWER_OFF);
     _exit(0);
@@ -156,11 +186,12 @@ int main(void) {
     signal(SIGTTOU, SIG_IGN);
 
     mount_all();
+    set_hostname();
     print_banner();
 
-    pid_t shell = spawn_shell();
+    pid_t shell = spawn_login();
     if (shell < 0) {
-        msg("init: cannot spawn shell\n");
+        msg("init: cannot spawn login\n");
         return 1;
     }
 
@@ -179,8 +210,8 @@ int main(void) {
             pid_t p;
             while ((p = waitpid(-1, &status, WNOHANG)) > 0) {
                 if (p == shell) {
-                    msg("\ninit: shell exited, restarting...\n");
-                    shell = spawn_shell();
+                    msg("\ninit: session ended, restarting login...\n");
+                    shell = spawn_login();
                 }
             }
         }
