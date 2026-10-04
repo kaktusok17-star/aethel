@@ -1,0 +1,87 @@
+#!/bin/sh
+# aethel-setup — first-boot configuration
+# Runs once, as root, on first boot.
+
+CONFIGURED="/etc/aethel/.configured"
+
+if [ -f "$CONFIGURED" ]; then
+    exec /usr/bin/aethel-login
+fi
+
+echo ""
+echo "============================================="
+echo "     Aethel Linux — First Boot Setup"
+echo "============================================="
+echo ""
+echo "This is the first boot of the system."
+echo "Configure basic options, then a login prompt"
+echo "will appear on every subsequent boot."
+echo ""
+
+# --- hostname ---
+printf "Hostname [aethel]: "
+read HOST
+[ -z "$HOST" ] && HOST="aethel"
+echo "$HOST" > /etc/hostname
+hostname "$HOST"
+
+# --- root password ---
+echo ""
+echo "Set a password for the root user."
+printf "Root password: "
+stty -echo
+read ROOT_PASS
+stty echo
+echo ""
+printf "Repeat: "
+stty -echo
+read ROOT_PASS2
+stty echo
+echo ""
+
+if [ "$ROOT_PASS" != "$ROOT_PASS2" ]; then
+    echo "Passwords do not match. Try again later with 'passwd'."
+elif [ -n "$ROOT_PASS" ]; then
+    HASH=$(echo "$ROOT_PASS" | cryptpw -m sha-512 2>/dev/null)
+    if [ -n "$HASH" ]; then
+        # Update /etc/shadow: replace root's hash
+        awk -v h="$HASH" 'BEGIN{FS=OFS=":"} $1=="root"{$2=h} {print}' /etc/shadow > /etc/shadow.new
+        mv /etc/shadow.new /etc/shadow
+        chmod 600 /etc/shadow
+    fi
+fi
+
+# --- optional user ---
+echo ""
+printf "Create user 'aethel'? [Y/n]: "
+read CREATE_USER
+case "$CREATE_USER" in
+    n*|N*) ;;
+    *)
+        printf "Password for 'aethel': "
+        stty -echo
+        read USER_PASS
+        stty echo
+        echo ""
+        if [ -n "$USER_PASS" ]; then
+            HASH=$(echo "$USER_PASS" | cryptpw -m sha-512 2>/dev/null)
+            if [ -n "$HASH" ]; then
+                awk -v h="$HASH" 'BEGIN{FS=OFS=":"} $1=="aethel"{$2=h} {print}' /etc/shadow > /etc/shadow.new
+                mv /etc/shadow.new /etc/shadow
+                chmod 600 /etc/shadow
+            fi
+        fi
+        ;;
+esac
+
+# --- mark configured ---
+mkdir -p /etc/aethel
+touch "$CONFIGURED"
+
+echo ""
+echo "============================================="
+echo "  Setup complete. Starting login prompt..."
+echo "============================================="
+echo ""
+
+exec /usr/bin/aethel-login
