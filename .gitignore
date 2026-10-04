@@ -1,8 +1,14 @@
+# binary artifacts
 initramfs/init
 initramfs/bin/
 initramfs/sbin/
-initramfs/usr/bin/
+initramfs/usr/bin/aethel-login
+initramfs/usr/bin/aethel-net
+initramfs/usr/bin/fastfetch
+initramfs/usr/bin/gris
 initramfs/usr/sbin/
+
+# build outputs
 *.iso
 *.cpio.gz
 iso/boot/vmlinuz
