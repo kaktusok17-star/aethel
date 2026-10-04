@@ -12,9 +12,9 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
-/* Что просили сделать: 0=ничего, 1=halt, 2=poweroff, 3=reboot */
-static volatile sig_atomic_t g_sigchld  = 0;
-static volatile sig_atomic_t g_action   = 0;
+/* Действие: 0=ничего, 1=halt, 2=poweroff, 3=reboot */
+static volatile sig_atomic_t g_sigchld = 0;
+static volatile sig_atomic_t g_action  = 0;
 
 static void on_sigchld(int sig) { (void)sig; g_sigchld = 1; }
 static void on_sigint (int sig) { (void)sig; g_action = 3; }  /* Ctrl+Alt+Del */
@@ -100,6 +100,28 @@ static void set_hostname(void) {
     }
 }
 
+/* Запустить boot-сервисы через /usr/bin/aethel service boot */
+static void run_boot_services(void) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        msg("init: cannot fork for boot services\n");
+        return;
+    }
+    if (pid == 0) {
+        char *envp[] = {
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "HOME=/root",
+            "TERM=linux",
+            NULL
+        };
+        char *argv[] = { "/bin/sh", "/usr/bin/aethel", "service", "boot", NULL };
+        execve("/bin/sh", argv, envp);
+        _exit(127);
+    }
+    int st;
+    waitpid(pid, &st, 0);
+}
+
 /* Запустить login или first-boot setup на tty1 */
 static pid_t spawn_login(void) {
     pid_t pid = fork();
@@ -124,7 +146,7 @@ static pid_t spawn_login(void) {
             NULL
         };
 
-        /* First boot → run aethel-setup. Otherwise → login. */
+        /* First boot → aethel-setup. Otherwise → aethel-login. */
         struct stat st;
         if (stat("/etc/aethel/.configured", &st) != 0) {
             char *setup_argv[] = { "/bin/sh", "/usr/bin/aethel-setup", NULL };
@@ -188,6 +210,9 @@ int main(void) {
     mount_all();
     set_hostname();
     print_banner();
+
+    /* Boot services before login */
+    run_boot_services();
 
     pid_t shell = spawn_login();
     if (shell < 0) {

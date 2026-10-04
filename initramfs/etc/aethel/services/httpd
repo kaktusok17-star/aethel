@@ -1,0 +1,4 @@
+# name = httpd
+# desc = busybox HTTP server
+# enabled = no
+# command = /bin/busybox httpd -f -p 8080 -h /var/www

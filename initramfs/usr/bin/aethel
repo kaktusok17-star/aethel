@@ -1,0 +1,118 @@
+#!/bin/sh
+# aethel — system management tool for Aethel Linux
+
+SERVICES_DIR="/etc/aethel/services"
+RUN_DIR="/run/aethel"
+
+svc_meta() {
+    local f="$SERVICES_DIR/$1"
+    [ -f "$f" ] || return 1
+    sed -n "s/^# *$2 *= *//p" "$f" | head -1
+}
+
+svc_list() {
+    [ -d "$SERVICES_DIR" ] || return 0
+    echo "NAME            ENABLED  DESCRIPTION"
+    echo "----            -------  -----------"
+    for f in "$SERVICES_DIR"/*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        desc=$(svc_meta "$name" desc)
+        enabled=$(svc_meta "$name" enabled)
+        printf "%-15s %-8s %s\n" "$name" "${enabled:-no}" "$desc"
+    done
+}
+
+svc_status() {
+    local name="$1"
+    local pidfile="$RUN_DIR/$name.pid"
+    if [ -f "$pidfile" ]; then
+        local pid=$(cat "$pidfile")
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "$name: running (pid $pid)"
+            return 0
+        fi
+    fi
+    echo "$name: stopped"
+    return 1
+}
+
+svc_start() {
+    local name="$1"
+    [ -n "$name" ] || { echo "aethel: service name required"; return 1; }
+    [ -f "$SERVICES_DIR/$name" ] || { echo "aethel: service '$name' not found"; return 1; }
+
+    if svc_status "$name" >/dev/null 2>&1; then
+        echo "$name: already running"
+        return 0
+    fi
+
+    local cmd=$(svc_meta "$name" command)
+    [ -n "$cmd" ] || { echo "aethel: no command for '$name'"; return 1; }
+
+    mkdir -p "$RUN_DIR"
+    sh -c "$cmd" &
+    local pid=$!
+    echo "$pid" > "$RUN_DIR/$name.pid"
+    echo "$name: started (pid $pid)"
+}
+
+svc_stop() {
+    local name="$1"
+    [ -n "$name" ] || { echo "aethel: service name required"; return 1; }
+    local pidfile="$RUN_DIR/$name.pid"
+    [ -f "$pidfile" ] || { echo "$name: not running"; return 0; }
+    local pid=$(cat "$pidfile")
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill "$pid"
+        echo "$name: stopped"
+    else
+        echo "$name: was not running"
+    fi
+    rm -f "$pidfile"
+}
+
+svc_restart() {
+    svc_stop "$1"
+    sleep 1
+    svc_start "$1"
+}
+
+svc_boot() {
+    [ -d "$SERVICES_DIR" ] || return 0
+    for f in "$SERVICES_DIR"/*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        enabled=$(svc_meta "$name" enabled)
+        if [ "$enabled" = "yes" ]; then
+            svc_start "$name"
+        fi
+    done
+}
+
+usage() {
+    echo "aethel — system management for Aethel Linux"
+    echo ""
+    echo "Usage:"
+    echo "  aethel service list"
+    echo "  aethel service start   <name>"
+    echo "  aethel service stop    <name>"
+    echo "  aethel service restart <name>"
+    echo "  aethel service status  <name>"
+    echo "  aethel service boot"
+}
+
+case "$1" in
+    service)
+        case "$2" in
+            list)    svc_list ;;
+            start)   svc_start   "$3" ;;
+            stop)    svc_stop    "$3" ;;
+            restart) svc_restart "$3" ;;
+            status)  svc_status  "$3" ;;
+            boot)    svc_boot ;;
+            *)       usage ;;
+        esac
+        ;;
+    *) usage ;;
+esac

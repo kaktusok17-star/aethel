@@ -1,0 +1,4 @@
+# name = syslogd
+# desc = system log daemon
+# enabled = yes
+# command = /bin/busybox syslogd -n -O /var/log/messages

@@ -1,0 +1,4 @@
+# name = telnetd
+# desc = busybox telnet server
+# enabled = no
+# command = /bin/busybox telnetd -p 23 -l /bin/sh
