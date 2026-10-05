@@ -1,12 +1,20 @@
-# binary artifacts (built by build.sh)
+# binary artifacts
 initramfs/init
 initramfs/bin/
 initramfs/sbin/
 initramfs/usr/bin/aethel-login
 initramfs/usr/bin/aethel-net
+initramfs/usr/bin/aethel-install
+initramfs/usr/bin/aethel-sudo
+initramfs/usr/bin/curl
+initramfs/usr/bin/extlinux
 initramfs/usr/bin/fastfetch
 initramfs/usr/bin/gris
 initramfs/usr/sbin/
+initramfs/lib/
+initramfs/lib64/
+initramfs/etc/ssl/
+initramfs/boot/
 
 # build outputs
 *.iso
