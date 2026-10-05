@@ -14,8 +14,57 @@
 #define MAX_TRIES 3
 #define MAX_LINE  256
 
+#define C_CYAN  "\033[36m"
+#define C_BOLD  "\033[1m"
+#define C_RESET "\033[0m"
+
 static void msg(const char *s) {
     if (write(STDOUT_FILENO, s, strlen(s)) < 0) { /* ignore */ }
+}
+
+static void read_version(char *out, size_t n) {
+    out[0] = '\0';
+    FILE *f = fopen("/etc/aethel-release", "r");
+    if (!f) { snprintf(out, n, "unknown"); return; }
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "VERSION=", 8) == 0) {
+            char *v = line + 8;
+            char *nl = strpbrk(v, "\r\n");
+            if (nl) *nl = '\0';
+            if (v[0] == '"') v++;
+            size_t len = strlen(v);
+            if (len > 0 && v[len-1] == '"') v[len-1] = '\0';
+            snprintf(out, n, "%s", v);
+            break;
+        }
+    }
+    fclose(f);
+    if (!out[0]) snprintf(out, n, "unknown");
+}
+
+static void print_banner(void) {
+    char ver[64];
+    read_version(ver, sizeof(ver));
+
+    char buf[2048];
+    snprintf(buf, sizeof(buf),
+        "\n"
+        C_CYAN
+        "       _         _   _          _ \n"
+        "      / \\   ___ | |_| |__   ___| |\n"
+        "     / _ \\ / _ \\| __| '_ \\ / _ \\ |\n"
+        "    / ___ \\  __/| |_| | | |  __/ |\n"
+        "   /_/   \\_\\___| \\__|_| |_|\\___|_|\n"
+        C_RESET
+        "                              " C_BOLD "Linux " C_RESET "%s\n"
+        "\n"
+        "   Console login required.\n"
+        "   Default user: " C_BOLD "root" C_RESET "\n"
+        "   Live mode:    password is " C_BOLD "empty" C_RESET "\n"
+        "\n",
+        ver);
+    msg(buf);
 }
 
 static int read_line(char *buf, size_t n) {
@@ -69,9 +118,8 @@ static int get_shadow_hash(const char *user, char *out, size_t n) {
 }
 
 static int verify_password(const char *password, const char *hash) {
-    if (!hash[0]) return -1;
+    if (!hash[0]) return 0;  /* empty hash = no password required */
     if (hash[0] == '!' || hash[0] == '*') return -1;
-
     char *computed = crypt(password, hash);
     if (!computed) return -1;
     return strcmp(computed, hash) == 0 ? 0 : -1;
@@ -119,16 +167,18 @@ static void start_shell(struct passwd *pw) {
 int main(void) {
     ioctl(STDIN_FILENO, TIOCSCTTY, 0);
 
+    print_banner();
+
     for (int attempt = 0; attempt < MAX_TRIES; attempt++) {
         char user[MAX_LINE];
         char pass[MAX_LINE];
 
-        msg("\nlogin: ");
+        msg(C_BOLD "login:" C_RESET " ");
         int n = read_line(user, sizeof(user));
         if (n < 0) return 1;
         if (n == 0) { attempt--; continue; }
 
-        msg("Password: ");
+        msg(C_BOLD "Password:" C_RESET " ");
         if (read_password(pass, sizeof(pass)) < 0) return 1;
 
         struct passwd *pw = getpwnam(user);
