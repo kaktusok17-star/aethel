@@ -12,7 +12,7 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
-/* Действие: 0=ничего, 1=halt, 2=poweroff, 3=reboot */
+/* Action: 0=none, 1=halt, 2=poweroff, 3=reboot */
 static volatile sig_atomic_t g_sigchld = 0;
 static volatile sig_atomic_t g_action  = 0;
 
@@ -100,7 +100,6 @@ static void set_hostname(void) {
     }
 }
 
-/* Запустить boot-сервисы через /usr/bin/aethel service boot */
 static void run_boot_services(void) {
     pid_t pid = fork();
     if (pid < 0) {
@@ -122,7 +121,7 @@ static void run_boot_services(void) {
     waitpid(pid, &st, 0);
 }
 
-/* Запустить login или first-boot setup на tty1 */
+/* Spawn login on tty1 */
 static pid_t spawn_login(void) {
     pid_t pid = fork();
     if (pid < 0) return -1;
@@ -146,18 +145,12 @@ static pid_t spawn_login(void) {
             NULL
         };
 
-        /* First boot → aethel-setup. Otherwise → aethel-login. */
-        struct stat st;
-        if (stat("/etc/aethel/.configured", &st) != 0) {
-            char *setup_argv[] = { "/bin/sh", "/usr/bin/aethel-setup", NULL };
-            execve("/bin/sh", setup_argv, envp);
-        } else {
-            char *login_argv[] = { "/usr/bin/aethel-login", NULL };
-            execve("/usr/bin/aethel-login", login_argv, envp);
-        }
+        /* Always run login. */
+        char *login_argv[] = { "/usr/bin/aethel-login", NULL };
+        execve("/usr/bin/aethel-login", login_argv, envp);
 
         /* Fallback: root shell */
-        msg("init: no login/setup found, starting root shell\n");
+        msg("init: no aethel-login, starting root shell\n");
         char *sh_argv[] = { "/bin/sh", "-l", NULL };
         execve("/bin/sh", sh_argv, envp);
         _exit(127);
@@ -211,7 +204,6 @@ int main(void) {
     set_hostname();
     print_banner();
 
-    /* Boot services before login */
     run_boot_services();
 
     pid_t shell = spawn_login();
