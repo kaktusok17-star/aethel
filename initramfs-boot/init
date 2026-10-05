@@ -1,0 +1,44 @@
+#!/bin/sh
+# initramfs-boot: minimal initramfs that mounts real root and switches to it.
+
+mount -t proc     proc /proc
+mount -t sysfs    sys  /sys
+mount -t devtmpfs dev  /dev
+
+# Parse root= from kernel cmdline
+ROOT=""
+for x in $(cat /proc/cmdline); do
+    case "$x" in
+        root=*) ROOT="${x#root=}" ;;
+    esac
+done
+[ -z "$ROOT" ] && ROOT="/dev/sda1"
+
+echo "aethel-boot: root device is $ROOT"
+
+# Wait for the device to appear (up to 10 seconds)
+i=0
+while [ $i -lt 10 ]; do
+    if [ -b "$ROOT" ]; then
+        echo "aethel-boot: device ready"
+        break
+    fi
+    echo "aethel-boot: waiting for $ROOT..."
+    sleep 1
+    i=$((i + 1))
+done
+
+if [ ! -b "$ROOT" ]; then
+    echo "aethel-boot: device $ROOT not found"
+    exec /bin/sh
+fi
+
+echo "aethel-boot: mounting $ROOT..."
+mkdir -p /newroot
+if ! mount "$ROOT" /newroot; then
+    echo "aethel-boot: cannot mount $ROOT"
+    exec /bin/sh
+fi
+
+echo "aethel-boot: switching to root..."
+exec switch_root /newroot /init
