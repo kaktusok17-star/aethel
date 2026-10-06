@@ -2,7 +2,7 @@
 # build.sh — build Aethel Linux ISO
 set -e
 
-VERSION="0.8.0"
+VERSION="1.0.0"
 
 echo "==> Aethel Linux ${VERSION} build"
 
